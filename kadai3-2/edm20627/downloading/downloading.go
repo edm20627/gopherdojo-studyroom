@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 
@@ -30,20 +31,21 @@ func (d *Download) Run() int {
 		fmt.Fprintln(os.Stderr, err)
 	}
 
-	// 対象をGet
-	res, err := d.download(contentLength)
+	// ダウンロード先を作成
+	dir, err := ioutil.TempDir("", "download")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
-	defer res.Body.Close()
+	defer os.RemoveAll(dir)
 
-	file, err := os.Create(d.options.Output)
+	// ダウンロード
+	err = d.download(contentLength, dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
-	defer file.Close()
 
-	_, err = io.Copy(file, res.Body)
+	// マージ
+	err = d.merge(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
@@ -71,18 +73,60 @@ func (d *Download) getContentLength() (int, error) {
 	}
 }
 
-func (d *Download) download(contentLength int) (*http.Response, error) {
+func (d *Download) download(contentLength int, dir string) error {
 	req, err := http.NewRequest("GET", d.options.URL, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", 0, contentLength-1))
+	preMin := 0
+	min, max := 0, 0
+	for n := d.options.ParallelNum; 0 < n; n-- {
+		min = preMin
+		max = contentLength/n - 1
+		preMin = contentLength / n
+		fmt.Println(min, max)
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", min, max))
 
-	res, err := http.DefaultClient.Do(req)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+
+		defer res.Body.Close()
+
+		file, err := os.Create(fmt.Sprintf("%v/%v-%v", dir, n, d.options.Output))
+		fmt.Println(file.Name())
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		defer file.Close()
+
+		_, err = io.Copy(file, res.Body)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+
+	}
+	return nil
+}
+
+func (d *Download) merge(dir string) error {
+	file, err := os.Create(d.options.Output)
 	if err != nil {
-		return nil, err
+		fmt.Fprintln(os.Stderr, err)
 	}
+	defer file.Close()
 
-	return res, err
+	for n := d.options.ParallelNum; 0 < n; n-- {
+		src, err := os.Open(fmt.Sprintf("%v/%v-%v", dir, n, d.options.Output))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		_, err = io.Copy(file, src)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+	}
+	return nil
 }
