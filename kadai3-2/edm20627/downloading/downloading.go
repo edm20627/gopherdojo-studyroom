@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/edm20627/gopherdojo-studyroom/kadai3-2/edm20627/option"
 )
@@ -74,40 +75,54 @@ func (d *Download) getContentLength() (int, error) {
 }
 
 func (d *Download) download(contentLength int, dir string) error {
+	preMin := 0
+	min, max := 0, 0
+
+	var wg sync.WaitGroup
+	wg.Add(d.options.ParallelNum)
+
+	for n := d.options.ParallelNum; 0 < n; n-- {
+		min = preMin
+		max = contentLength/n - 1
+		preMin = contentLength / n
+		go d.parallelDownload(n, min, max, dir, &wg)
+	}
+
+	wg.Wait()
+	return nil
+}
+
+func (d *Download) parallelDownload(n, min, max int, dir string, wg *sync.WaitGroup) error {
+	defer wg.Done()
+
+	fmt.Println(min, max)
+
 	req, err := http.NewRequest("GET", d.options.URL, nil)
 	if err != nil {
 		return err
 	}
 
-	preMin := 0
-	min, max := 0, 0
-	for n := d.options.ParallelNum; 0 < n; n-- {
-		min = preMin
-		max = contentLength/n - 1
-		preMin = contentLength / n
-		fmt.Println(min, max)
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", min, max))
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", min, max))
 
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-
-		defer res.Body.Close()
-
-		file, err := os.Create(fmt.Sprintf("%v/%v-%v", dir, n, d.options.Output))
-		fmt.Println(file.Name())
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-		}
-		defer file.Close()
-
-		_, err = io.Copy(file, res.Body)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-		}
-
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
 	}
+
+	defer res.Body.Close()
+
+	file, err := os.Create(fmt.Sprintf("%v/%v-%v", dir, n, d.options.Output))
+	fmt.Println(file.Name())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+	defer file.Close()
+
+	_, err = io.Copy(file, res.Body)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+
 	return nil
 }
 
