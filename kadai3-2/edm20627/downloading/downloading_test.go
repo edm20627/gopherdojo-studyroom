@@ -73,7 +73,7 @@ func TestRun(t *testing.T) {
 					Timeout:     c.timeout,
 				},
 			}
-			client := &downloading.Client{downloader}
+			client := &downloading.Client{Download: downloader}
 			if result := client.Run(); result != c.result {
 				t.Errorf("want %d, got %d\n", c.result, result)
 			}
@@ -85,7 +85,7 @@ func TestRun(t *testing.T) {
 func TestMockRun(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			downloader := &downloading.DummyDownload{
+			dummyDownloader := &downloading.DummyDownload{
 				Options: &option.Options{
 					URL:         c.url,
 					Output:      c.output,
@@ -93,7 +93,7 @@ func TestMockRun(t *testing.T) {
 					Timeout:     c.timeout,
 				},
 			}
-			client := &downloading.Client{downloader}
+			client := &downloading.Client{Download: dummyDownloader}
 			if result := client.Run(); result != c.result {
 				t.Errorf("want %d, got %d\n", c.result, result)
 			}

@@ -9,7 +9,7 @@ import (
 
 func main() {
 	fmt.Println("Download started")
-	var client = &downloading.Client{downloading.NewDownload()}
+	client := &downloading.Client{Download: downloading.NewDownload()}
 
 	status := client.Run()
 	switch status {
