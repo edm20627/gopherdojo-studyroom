@@ -8,36 +8,56 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"reflect"
 
 	"github.com/edm20627/gopherdojo-studyroom/kadai3-2/edm20627/option"
 	"golang.org/x/sync/errgroup"
 )
 
-type Download struct {
-	options option.Options
+const (
+	StatusOK int = iota
+	StatusErr
+)
+
+type Doer interface {
+	getContentLength(ctx context.Context) (int, error)
+	download(ctx context.Context, contentLength int, dir string) error
+	parallelDownload(ctx context.Context, n, min, max int, dir string, errCh chan error)
+	merge(dir string) error
 }
 
-func New() *Download {
+type Client struct {
+	Download Doer
+}
+
+type Download struct {
+	Options *option.Options
+}
+
+func NewDownload() *Download {
 	var options option.Options
 	options.Parse()
 	return &Download{
-		options: options,
+		Options: &options,
 	}
 }
 
-func (d *Download) Run() int {
+func (d *Client) Run() int {
+	// moacのためreflect使用
+	options := reflect.ValueOf(d.Download).Elem().Field(0).Interface().(*option.Options)
+
 	bc := context.Background()
-	ctx, cancel := context.WithTimeout(bc, d.options.Timeout)
+	ctx, cancel := context.WithTimeout(bc, options.Timeout)
 	defer cancel()
 
 	// contentLengthを取得
-	contentLength, err := d.getContentLength(ctx)
+	contentLength, err := d.Download.getContentLength(ctx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	// ダウンロード先を作成
+	// ダウンロード先の作成
 	dir, err := ioutil.TempDir("", "download")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -45,15 +65,15 @@ func (d *Download) Run() int {
 	}
 	defer os.RemoveAll(dir)
 
-	// ダウンロード
-	err = d.download(ctx, contentLength, dir)
+	// ダウンロード実行
+	err = d.Download.download(ctx, contentLength, dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	// マージ
-	err = d.merge(dir)
+	// マージ実行
+	err = d.Download.merge(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -63,12 +83,10 @@ func (d *Download) Run() int {
 }
 
 func (d *Download) getContentLength(ctx context.Context) (int, error) {
-	req, err := http.NewRequest("HEAD", d.options.URL, nil)
+	req, err := http.NewRequestWithContext(ctx, "HEAD", d.Options.URL, nil)
 	if err != nil {
 		return 0, err
 	}
-
-	req = req.WithContext(ctx)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -90,7 +108,7 @@ func (d *Download) download(ctx context.Context, contentLength int, dir string) 
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	for n := d.options.ParallelNum; 0 < n; n-- {
+	for n := d.Options.ParallelNum; 0 < n; n-- {
 		n := n
 		min = preMin
 		max = contentLength/n - 1
@@ -98,7 +116,7 @@ func (d *Download) download(ctx context.Context, contentLength int, dir string) 
 		go d.parallelDownload(ctx, n, min, max, dir, errCh)
 	}
 
-	for n := d.options.ParallelNum; 0 < n; n-- {
+	for n := d.Options.ParallelNum; 0 < n; n-- {
 		g.Go(func() error {
 			select {
 			case <-ctx.Done():
@@ -109,14 +127,13 @@ func (d *Download) download(ctx context.Context, contentLength int, dir string) 
 		})
 	}
 
-	// for n := d.options.ParallelNum; 0 < n; n-- {
+	// for n := d.Options.ParallelNum; 0 < n; n-- {
 	// 	n := n
 	// 	g.Go(func() error {
 	// 		min = preMin
 	// 		max = contentLength/n - 1
 	// 		preMin = contentLength / n
 	// 		return d.parallelDownload(ctx, n, min, max, dir)
-
 	// 	})
 	// }
 
@@ -128,28 +145,21 @@ func (d *Download) download(ctx context.Context, contentLength int, dir string) 
 }
 
 func (d *Download) parallelDownload(ctx context.Context, n, min, max int, dir string, errCh chan error) {
-	fmt.Println(min, max)
-
-	req, err := http.NewRequest("GET", d.options.URL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", d.Options.URL, nil)
 	if err != nil {
 		errCh <- err
 		return
 	}
-
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", min, max))
-
-	req = req.WithContext(ctx)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		errCh <- err
 		return
 	}
-
 	defer res.Body.Close()
 
-	file, err := os.Create(fmt.Sprintf("%v/%v-%v", dir, n, d.options.Output))
-	fmt.Println(file.Name())
+	file, err := os.Create(fmt.Sprintf("%v/%v-%v", dir, n, d.Options.Output))
 
 	if err != nil {
 		errCh <- err
@@ -167,14 +177,14 @@ func (d *Download) parallelDownload(ctx context.Context, n, min, max int, dir st
 }
 
 func (d *Download) merge(dir string) error {
-	file, err := os.Create(d.options.Output)
+	file, err := os.Create(d.Options.Output)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	for n := d.options.ParallelNum; 0 < n; n-- {
-		src, err := os.Open(fmt.Sprintf("%v/%v-%v", dir, n, d.options.Output))
+	for n := d.Options.ParallelNum; 0 < n; n-- {
+		src, err := os.Open(fmt.Sprintf("%v/%v-%v", dir, n, d.Options.Output))
 		if err != nil {
 			return err
 		}
