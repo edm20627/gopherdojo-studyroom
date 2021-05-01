@@ -11,6 +11,7 @@ import (
 	"reflect"
 
 	"github.com/edm20627/gopherdojo-studyroom/kadai3-2/edm20627/option"
+	"github.com/edm20627/gopherdojo-studyroom/kadai3-2/edm20627/signal_detection"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -46,8 +47,8 @@ func (d *Client) Run() int {
 	// moacのためreflect使用
 	options := reflect.ValueOf(d.Download).Elem().Field(0).Interface().(*option.Options)
 
-	bc := context.Background()
-	ctx, cancel := context.WithTimeout(bc, options.Timeout)
+	// シグナル受信
+	ctx, cancel := signal_detection.Listen(options.Timeout)
 	defer cancel()
 
 	// contentLengthを取得
@@ -63,7 +64,11 @@ func (d *Client) Run() int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	defer os.RemoveAll(dir)
+
+	// 添付ファイルを削除
+	deleteTempFile := func() { os.RemoveAll(dir) }
+	signal_detection.DeleteTempFile = deleteTempFile
+	defer deleteTempFile()
 
 	// ダウンロード実行
 	err = d.Download.download(ctx, contentLength, dir)
