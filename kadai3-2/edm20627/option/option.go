@@ -13,9 +13,9 @@ type Options struct {
 }
 
 func (options *Options) Parse() {
-	flag.StringVar(&options.URL, "u", "https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js", "Download destination url")
-	flag.StringVar(&options.Output, "o", "download.js", "Download file name")
-	flag.IntVar(&options.ParallelNum, "p", 2, "Paralle number")
+	flag.StringVar(&options.URL, "u", "https://golang.org/doc/gopher/appenginegophercolor.jpg", "Download destination url")
+	flag.StringVar(&options.Output, "o", "download.jpg", "Download file name")
+	flag.IntVar(&options.ParallelNum, "p", 4, "Paralle number")
 	flag.DurationVar(&options.Timeout, "t", 10*time.Second, "Timeout")
 	flag.Parse()
 }

@@ -44,7 +44,7 @@ func NewDownload() *Download {
 }
 
 func (d *Client) Run() int {
-	// moacのためreflect使用
+	// mockのためreflect使用
 	options := reflect.ValueOf(d.Download).Elem().Field(0).Interface().(*option.Options)
 
 	// シグナル受信
@@ -119,9 +119,6 @@ func (d *Download) download(ctx context.Context, contentLength int, dir string) 
 		max = contentLength/n - 1
 		preMin = contentLength / n
 		go d.parallelDownload(ctx, n, min, max, dir, errCh)
-	}
-
-	for n := d.Options.ParallelNum; 0 < n; n-- {
 		g.Go(func() error {
 			select {
 			case <-ctx.Done():
@@ -131,16 +128,6 @@ func (d *Download) download(ctx context.Context, contentLength int, dir string) 
 			}
 		})
 	}
-
-	// for n := d.Options.ParallelNum; 0 < n; n-- {
-	// 	n := n
-	// 	g.Go(func() error {
-	// 		min = preMin
-	// 		max = contentLength/n - 1
-	// 		preMin = contentLength / n
-	// 		return d.parallelDownload(ctx, n, min, max, dir)
-	// 	})
-	// }
 
 	if err := g.Wait(); err != nil {
 		return err
