@@ -1,9 +1,6 @@
 package downloading_test
 
 import (
-	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -54,33 +51,32 @@ var cases = []struct {
 	},
 }
 
-func TestRun(t *testing.T) {
-	// 別goroutine上でリッスンする
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Accept-Ranges", "bytes")
-		fmt.Fprintln(w, "test test test test test test test")
-	})
-	ts := httptest.NewServer(h)
-	defer ts.Close()
+// func TestRun(t *testing.T) {
+// 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		w.Header().Set("Accept-Ranges", "bytes")
+// 		fmt.Fprintln(w, "test test test test test test test")
+// 	})
+// 	ts := httptest.NewServer(h)
+// 	defer ts.Close()
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			downloader := &downloading.Download{
-				Options: &option.Options{
-					URL:         ts.URL,
-					Output:      c.output,
-					ParallelNum: c.parallelNum,
-					Timeout:     c.timeout,
-				},
-			}
-			client := &downloading.Client{Download: downloader}
-			if result := client.Run(); result != c.result {
-				t.Errorf("want %d, got %d\n", c.result, result)
-			}
-		})
-		deleteFile(t, c.output)
-	}
-}
+// 	for _, c := range cases {
+// 		t.Run(c.name, func(t *testing.T) {
+// 			downloader := &downloading.Download{
+// 				Options: &option.Options{
+// 					URL:         ts.URL,
+// 					Output:      c.output,
+// 					ParallelNum: c.parallelNum,
+// 					Timeout:     c.timeout,
+// 				},
+// 			}
+// 			client := &downloading.Client{Download: downloader}
+// 			if result := client.Run(); result != c.result {
+// 				t.Errorf("want %d, got %d\n", c.result, result)
+// 			}
+// 		})
+// 		deleteFile(t, c.output)
+// 	}
+// }
 
 func TestMockRun(t *testing.T) {
 	for _, c := range cases {

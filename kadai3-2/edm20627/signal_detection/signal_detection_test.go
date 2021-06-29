@@ -11,22 +11,25 @@ import (
 
 func TestListen(t *testing.T) {
 	cases := []struct {
-		name   string
-		signal bool
+		name    string
+		signal  bool
+		timeout time.Duration
 	}{
 		{
-			name:   "execute Ctrl+C",
-			signal: true,
+			name:    "execute Ctrl+C",
+			signal:  true,
+			timeout: 3 * time.Second,
 		},
 		{
-			name:   "timeout",
-			signal: false,
+			name:    "timeout",
+			signal:  false,
+			timeout: 1 * time.Second,
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ctx, _ := signal_detection.Listen(1 * time.Millisecond)
+			ctx, _ := signal_detection.Listen(c.timeout)
 
 			if c.signal {
 				doneCh := make(chan int)
@@ -46,7 +49,7 @@ func TestListen(t *testing.T) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(2 * time.Millisecond):
+			case <-time.After(2 * time.Second):
 				t.Error("Cancellation failure")
 			}
 		})

@@ -32,9 +32,6 @@ func (d *DummyDownload) download(ctx context.Context, contentLength int, dir str
 		max = contentLength/n - 1
 		preMin = contentLength / n
 		go d.parallelDownload(ctx, n, min, max, dir, errCh)
-	}
-
-	for n := d.Options.ParallelNum; 0 < n; n-- {
 		g.Go(func() error {
 			select {
 			case <-ctx.Done():
